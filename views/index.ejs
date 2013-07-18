@@ -1,0 +1,19 @@
+<html>
+	<head>
+		<title>JustAGame - A multiplayer game built using HTML5 canvas and WebSockets</title>
+		<link rel="stylesheet" href="style/reset.css">
+		<link rel="stylesheet" href="style/game.css">
+	</head>
+	
+	<body>
+		<h1>Welcome to JustAGame!</h1>
+		<p>&nbsp;</p>
+		<p>A multiplayer game built using HTML5 canvas and WebSockets.</p>
+		<p>&nbsp;</p>
+		<% if (!user) { %>
+			<p>Please <a href="/login">log in</a> to play.</p>
+		<% } else { %>
+			<p>Hello, <%= user.username %>. Click <a href="/game">here to play</a>.</p>
+		<% } %>
+	</body>
+</html>

@@ -1,0 +1,17 @@
+{
+  "name": "testgame",
+  "version": "0.0.2",
+  "private": true,
+  "scripts": {
+    "start": "node server"
+  },
+  "dependencies": {
+    "express": "*",
+    "passport": "*",
+    "passport-facebook": "*",
+    "passport-twitter": "*",
+    "ejs": "*",
+    "socket.io": "*",
+    "aws-sdk": "*"
+  }
+}

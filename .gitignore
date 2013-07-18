@@ -1,0 +1,4 @@
+*~
+#*
+.elasticbeanstalk/
+node_modules/
