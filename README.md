@@ -25,3 +25,7 @@ Any feedback is welcome! :)
 Copyright (c) 2013 Danilo Poccia, http://blog.danilopoccia.net
 
 This code is licensed under the The MIT License (MIT). Please see the LICENSE file that accompanies this project for the terms of use.
+
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/danilop/justagame/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+
