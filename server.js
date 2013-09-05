@@ -7,6 +7,8 @@ var express = require('express'),
 
 var AWS = require('aws-sdk');
 
+var config = require(process.env.CONFIG_FILE);
+
 var ENABLE_LOGIN = false;
 
 var FACEBOOK_APP_ID = "<replace with your own>";
@@ -37,8 +39,8 @@ function init() {
   
     gameWidth = 600;
     gameHeight = 600;
-  
-    AWS.config.update({region: process.env.PARAM1});
+
+    AWS.config.update({region: config.Region});
     sqs = new AWS.SQS();
     sqs.client.getQueueUrl({QueueName: 'JustAGame-Queue'}, function(err, data) {
 	    if (!err) {
@@ -48,6 +50,7 @@ function init() {
 		console.log('Error getting Queue URL: '+err);
 	    }
 	});
+    var elasticache = new AWS.ElastiCache();
 
     port = process.env.PORT || 3000;
 
@@ -183,6 +186,25 @@ function init() {
     io.configure(function() {
 	    // io.set('transports', ['websocket']);
 	    io.set('log level', 3);
+            elasticache.describeCacheClusters({CacheClusterId: config.ElastiCache, ShowCacheNodeInfo: true}, function(err, data) {
+                    if (!err) {
+                        console.log('Describe Cache Cluder Id: '+config.ElastiCache+' data: '+data);
+                        redisEndpoint = data.CacheClusters[0].CacheNodes[0].Endpoint;
+                        var RedisStore = require('socket.io/lib/stores/redis'),
+                            redis  = require('socket.io/node_modules/redis'),
+                            pub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
+                            sub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
+                            client = redis.createClient(redisEndpoint.Port, redisEndpoint.Address);
+                        io.set('store', new RedisStore({
+                                    redisPub : pub
+                                        , redisSub : sub
+                                        , redisClient : client
+                                        }));
+                    } else {
+                        console.log('Error describing Cache Cluster: '+err);
+                    }
+                });
+
 	});
 	
     setEventHandlers();
