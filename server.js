@@ -17,6 +17,9 @@ var FACEBOOK_APP_SECRET = "<replace with your own>";
 var TWITTER_CONSUMER_KEY = "<replace with your own>";
 var TWITTER_CONSUMER_SECRET = "<replace with your own>";
 
+var sqs,
+    queueUrl;
+
 var app,
     server,
     io,
@@ -39,9 +42,9 @@ function init() {
     gameHeight = 600;
 
     AWS.config.update({region: config.Region});
-    var sqs = new AWS.SQS();
-    var elasticache = new AWS.ElastiCache();
-    var queueUrl = config.QueueURL;
+    sqs = new AWS.SQS();
+    elasticache = new AWS.ElastiCache();
+    queueUrl = config.QueueURL;
 
     port = process.env.PORT || 3000;
 
