@@ -23,8 +23,6 @@ var app,
     port,
     socket,
     players,
-    sqs,
-    queueUrl,
     gameWidth,
     gameHeight;
 
@@ -41,16 +39,9 @@ function init() {
     gameHeight = 600;
 
     AWS.config.update({region: config.Region});
-    sqs = new AWS.SQS();
-    sqs.client.getQueueUrl({QueueName: 'JustAGame-Queue'}, function(err, data) {
-	    if (!err) {
-		console.log('Get Queue URL: '+data.QueueUrl);
-		queueUrl = data.QueueUrl;
-	    } else {
-		console.log('Error getting Queue URL: '+err);
-	    }
-	});
+    var sqs = new AWS.SQS();
     var elasticache = new AWS.ElastiCache();
+    var queueUrl = config.QueueURL;
 
     port = process.env.PORT || 3000;
 
@@ -72,7 +63,7 @@ function init() {
 		function(accessToken, refreshToken, profile, done) {
 		    // asynchronous verification, for effect...
 		    process.nextTick(function () {
-      
+			          
 			    // To keep the example simple, the user's Facebook profile is returned to
 			    // represent the logged-in user.  In a typical application, you would want
 			    // to associate the Facebook account with a user record in your database,
@@ -188,7 +179,7 @@ function init() {
 	    io.set('log level', 3);
             elasticache.describeCacheClusters({CacheClusterId: config.ElastiCache, ShowCacheNodeInfo: true}, function(err, data) {
                     if (!err) {
-                        console.log('Describe Cache Cluder Id: '+config.ElastiCache+' data: '+data);
+                        console.log('Describe Cache Cluster Id: '+config.ElastiCache+' data: '+data);
                         redisEndpoint = data.CacheClusters[0].CacheNodes[0].Endpoint;
                         var RedisStore = require('socket.io/lib/stores/redis'),
                             redis  = require('socket.io/node_modules/redis'),
