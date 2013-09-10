@@ -180,25 +180,32 @@ function init() {
     io.configure(function() {
 	    // io.set('transports', ['websocket']);
 	    io.set('log level', 3);
-            elasticache.describeCacheClusters({CacheClusterId: config.ElastiCache, ShowCacheNodeInfo: true}, function(err, data) {
-                    if (!err) {
-                        console.log('Describe Cache Cluster Id: '+config.ElastiCache+' data: '+data);
-                        redisEndpoint = data.CacheClusters[0].CacheNodes[0].Endpoint;
-                        var RedisStore = require('socket.io/lib/stores/redis'),
-                            redis  = require('socket.io/node_modules/redis'),
-                            pub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
-                            sub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
-                            client = redis.createClient(redisEndpoint.Port, redisEndpoint.Address);
-                        io.set('store', new RedisStore({
-                                    redisPub : pub
-                                        , redisSub : sub
-                                        , redisClient : client
-                                        }));
-                    } else {
-                        console.log('Error describing Cache Cluster: '+err);
-                    }
-                });
-
+	    function getRedisEndpoint() {
+		elasticache.describeCacheClusters({CacheClusterId: config.ElastiCache, ShowCacheNodeInfo: true},
+						  function(err, data) {
+						      if (!err) {
+							  console.log('Describe Cache Cluster Id: '+config.ElastiCache);
+							  if (data.CacheClusters[0].CacheClusterStatus == 'available') { 
+							      redisEndpoint = data.CacheClusters[0].CacheNodes[0].Endpoint;
+							      var RedisStore = require('socket.io/lib/stores/redis'),
+								  redis  = require('socket.io/node_modules/redis'),
+								  pub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
+								  sub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
+								  client = redis.createClient(redisEndpoint.Port, redisEndpoint.Address);
+							      io.set('store', new RedisStore({
+									  redisPub : pub
+									      , redisSub : sub
+									      , redisClient : client
+									      }));
+							  } else {
+							      getRedisEndpoint(); // Try again until available
+							  }
+						      } else {
+							  console.log('Error describing Cache Cluster: '+err);
+						      }
+						  });
+	    }
+	    
 	});
 	
     setEventHandlers();
