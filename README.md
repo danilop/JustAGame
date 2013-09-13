@@ -8,7 +8,7 @@ It is based on the [mozilla-festival](https://github.com/robhawkes/mozilla-festi
 The server side code is written in [Node.js](http://nodejs.org) with [Socket.IO](http://socket.io).
 
 I used the [AWS SDK for Node.js](http://aws.amazon.com/sdkfornodejs/)
-to log client connections/disconnections in an [Amazon Simple Queue Service (SQS)](http://aws.amazon.com/sqs/).
+to log client connections/disconnections in an [Amazon Simple Queue Service (SQS)](http://aws.amazon.com/sqs/) queue.
 
 The game is using WebSockets for bidirectional communication between clients (i.e. browsers) and server.
 I used [Redis](http://redis.io) (managed by [ElastiCache](http://aws.amazon.com/elasticache)) for session data.
