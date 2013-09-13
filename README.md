@@ -13,6 +13,9 @@ to log client connections/disconnections in an [Amazon Simple Queue Service (SQS
 The game is using WebSockets for bidirectional communication between clients (i.e. browsers) and server.
 I used [Redis](http://redis.io) (managed by [ElastiCache](http://aws.amazon.com/elasticache)) for session data.
 
+You can use the accelerometer of a (mobile) device to move.
+You can check if your device supports “DeviceOrientation” events [here](http://caniuse.com/deviceorientation).
+
 This is a work-in-progress as I'm going to add other sample features in the (near?) future.
 
 The latest version is currently deployed here (I used [AWS Elastic Beanstalk](http://aws.amazon.com/elasticbeanstalk/)):
