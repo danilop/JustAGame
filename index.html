@@ -37,14 +37,18 @@
 <p>A (very) simple game to showcase the power of <a href="http://en.wikipedia.org/wiki/HTML5">HTML5</a> + <a href="http://en.wikipedia.org/wiki/WebSocket">WebSockets</a>
 and the use of <a href="http://aws.amazon.com">Amazon Web Services (AWS)</a> <a href="http://aws.amazon.com/code">APIs</a> within an application.</p>
 
-<p>It is based on the <a href="https://github.com/robhawkes/mozilla-festival">mozilla-festival</a> repository by <a href="http://rawkes.com">Rob Hawkes</a> (<a href="https://twitter.com/robhawkes">@robhawkes</a>].</p>
+<p>It is based on the <a href="https://github.com/robhawkes/mozilla-festival">mozilla-festival</a> repository by <a href="http://rawkes.com">Rob Hawkes</a> (<a href="https://twitter.com/robhawkes">@robhawkes</a>).</p>
 
 <p>The server side code is written in <a href="http://nodejs.org">Node.js</a> with <a href="http://socket.io">Socket.IO</a>.</p>
 
 <p>I used the <a href="http://aws.amazon.com/sdkfornodejs/">AWS SDK for Node.js</a>
-to log client connections/disconnections in an <a href="http://aws.amazon.com/sqs/">Amazon Simple Queue Service (SQS)</a>.</p>
+to log client connections/disconnections in an <a href="http://aws.amazon.com/sqs/">Amazon Simple Queue Service (SQS)</a> queue.</p>
 
-<p>The game is using WebSockets for bidirectional communication between clients (i.e. browsers) and server.</p>
+<p>The game is using WebSockets for bidirectional communication between clients (i.e. browsers) and server.
+I used <a href="http://redis.io">Redis</a> (managed by <a href="http://aws.amazon.com/elasticache">ElastiCache</a>) for session data.</p>
+
+<p>You can use the accelerometer of a (mobile) device to move.
+You can check if your device supports “DeviceOrientation” events <a href="http://caniuse.com/deviceorientation">here</a>.</p>
 
 <p>This is a work-in-progress as I'm going to add other sample features in the (near?) future.</p>
 
@@ -60,6 +64,8 @@ to log client connections/disconnections in an <a href="http://aws.amazon.com/sq
 <p>Copyright (c) 2013 Danilo Poccia, <a href="http://blog.danilopoccia.net">http://blog.danilopoccia.net</a></p>
 
 <p>This code is licensed under the The MIT License (MIT). Please see the LICENSE file that accompanies this project for the terms of use.</p>
+
+<p><a href="https://bitdeli.com/free" title="Bitdeli Badge"><img src="https://d2weczhvl823v0.cloudfront.net/danilop/justagame/trend.png" alt="Bitdeli Badge"></a></p>
       </section>
     </div>
 
