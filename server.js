@@ -362,9 +362,6 @@ function onNewPlayer(data, local) {
 
     if (local) {
 
-	data.serverId = serverId;
-	serverBroadcast.publish('new player', JSON.stringify(data));
-
 	var message = 'onNewPlayer:' + JSON.stringify(newPlayer);
 	sqs.client.sendMessage({QueueUrl:queueUrl, MessageBody:message},
 			       function(err, data) {
@@ -383,6 +380,8 @@ function onNewPlayer(data, local) {
 		    score:newPlayer.score
 		    });
    
+	forOthersData.serverId = serverId;
+	serverBroadcast.publish('new player', JSON.stringify(forOthersData));
 
 	var i, existingPlayer;
 	sendAllPlayers.call(this, true);
