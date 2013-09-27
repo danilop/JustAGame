@@ -18,6 +18,11 @@ var canvas,			// Canvas DOM element
 function init(u) {
 	
     username = u;
+
+    while (!username) {
+        username = window.prompt('Please enter your name:');
+    }
+
     gameWidth = 600;
     gameHeight = 600;
 	
@@ -44,7 +49,6 @@ function init(u) {
     // Initialise the local player
     localPlayer = new Player(startX, startY, gameWidth, gameHeight);
 
-    //socket = io.connect('http://justagame.elasticbeanstalk.com', {port: 80});
     socket = io.connect();
 
     // Start listening for events
@@ -123,10 +127,8 @@ function onSocketConnected() {
 
     console.log("connect with username: "+username);
     if (username) {
-	console.log("1");
 	localPlayer.setName(username);
     } else {
-	console.log("2");
 	var name = window.prompt('Please enter your name:');
 	localPlayer.setName(name);
     }
@@ -144,6 +146,13 @@ function onSocketDisconnect() {
 
 function onNewPlayer(data) {
     console.log('New player connected: '+data.id+' color: '+data.color+' score: '+data.score);
+
+    var checkPlayer = playerById(data.id);
+    if (checkPlayer) {
+        console.log('Player already known:'+data.id);
+        return;
+    }
+
     var newPlayer = new Player(data.x, data.y);
     newPlayer.id = data.id;
     newPlayer.setName(data.name);
@@ -226,7 +235,6 @@ function animate() {
  **************************************************/
 function update() {
     if (localPlayer.update(input)) {
-	console.log('Update: ' + input);
 	socket.emit('move player', {x: localPlayer.getX(), y: localPlayer.getY()});
     };
 };

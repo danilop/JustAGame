@@ -1,9 +1,11 @@
-var express = require('express'),
+var dns = require('dns'),
+    express = require('express'),
     passport = require('passport'),
     FacebookStrategy = require('passport-facebook').Strategy,
     TwitterStrategy = require('passport-twitter').Strategy,
     util = require('util'),
-    Player = require('./Player').Player;
+    Player = require('./Player').Player,
+    uuid = require('node-uuid');
 
 var AWS = require('aws-sdk');
 
@@ -17,10 +19,13 @@ var FACEBOOK_APP_SECRET = "<replace with your own>";
 var TWITTER_CONSUMER_KEY = "<replace with your own>";
 var TWITTER_CONSUMER_SECRET = "<replace with your own>";
 
+var serverBroadcast;
+
 var sqs,
     queueUrl;
 
-var app,
+var serverId,
+    app,
     server,
     io,
     port,
@@ -31,17 +36,20 @@ var app,
 
 function ensureAuthenticated(req, res, next) {
     if (!ENABLE_LOGIN || req.isAuthenticated()) { return next(); }
-    res.redirect('/login')
-	}
+    res.redirect('/login');
+}
 
 function init() {
+
+    serverId = uuid.v4();
+    util.log('Unique serverId = '+ serverId);
 
     players = [];
   
     gameWidth = 600;
     gameHeight = 600;
 
-    AWS.config.update({region: config.Region});
+    AWS.config.update({region:config.Region});
     sqs = new AWS.SQS();
     elasticache = new AWS.ElastiCache();
     queueUrl = config.QueueURL;
@@ -59,9 +67,9 @@ function init() {
     if (ENABLE_LOGIN) {
 
 	passport.use(new FacebookStrategy({
-		    clientID: FACEBOOK_APP_ID,
-			clientSecret: FACEBOOK_APP_SECRET,
-			callbackURL: "/auth/facebook/callback"
+		    clientID:FACEBOOK_APP_ID,
+			clientSecret:FACEBOOK_APP_SECRET,
+			callbackURL:"/auth/facebook/callback"
 			},
 		function(accessToken, refreshToken, profile, done) {
 		    // asynchronous verification, for effect...
@@ -77,9 +85,9 @@ function init() {
 		));
 
 	passport.use(new TwitterStrategy({
-		    consumerKey: TWITTER_CONSUMER_KEY,
-			consumerSecret: TWITTER_CONSUMER_SECRET,
-			callbackURL: "/auth/twitter/callback"
+		    consumerKey:TWITTER_CONSUMER_KEY,
+			consumerSecret:TWITTER_CONSUMER_SECRET,
+			callbackURL:"/auth/twitter/callback"
 			},
 		function(token, tokenSecret, profile, done) {
 		    // asynchronous verification, for effect...
@@ -105,7 +113,7 @@ function init() {
 	    app.use(express.cookieParser());
 	    app.use(express.bodyParser());
 	    app.use(express.methodOverride());
-	    app.use(express.session({ secret: 'websockets html5' }));
+	    app.use(express.session({ secret:'websockets html5' }));
 	    // Initialize Passport!  Also use passport.session() middleware, to support
 	    // persistent login sessions (recommended).
 	    if (ENABLE_LOGIN) {
@@ -118,7 +126,7 @@ function init() {
 
     app.get('/', function(req, res){
 	    if (ENABLE_LOGIN) {
-		res.render('index', { user: req.user });
+		res.render('index', { user:req.user });
 	    } else {
 		res.redirect('/game');
 	    }
@@ -126,16 +134,16 @@ function init() {
 
     app.get('/game', ensureAuthenticated, function(req, res){
 	    if (ENABLE_LOGIN) {
-		res.render('game', { user: req.user.username });
+		res.render('game', { user:req.user.username });
 	    } else {
-		res.render('game', { user: '' });
+		res.render('game', { user:'' });
 	    }
 	});
 
     if (ENABLE_LOGIN) {
 
 	app.get('/login', function(req, res){
-		res.render('login', { user: req.user });
+		res.render('login', { user:req.user });
 	    });
 
 	app.get('/auth/facebook',
@@ -146,7 +154,7 @@ function init() {
 		});
 
 	app.get('/auth/facebook/callback', 
-		passport.authenticate('facebook', { failureRedirect: '/login' }),
+		passport.authenticate('facebook', { failureRedirect:'/login' }),
 		function(req, res) {
 		    res.redirect('/game');
 		});
@@ -159,7 +167,7 @@ function init() {
 		});
 
 	app.get('/auth/twitter/callback', 
-		passport.authenticate('twitter', { failureRedirect: '/login' }),
+		passport.authenticate('twitter', { failureRedirect:'/login' }),
 		function(req, res) {
 		    res.redirect('/game');
 		});
@@ -179,79 +187,126 @@ function init() {
     
     io.configure(function() {
 	    // io.set('transports', ['websocket']);
-	    io.set('log level', 3);
+	    io.set('log level', 1); // warn
 	    function getRedisEndpoint() {
-		elasticache.describeCacheClusters({CacheClusterId: config.ElastiCache, ShowCacheNodeInfo: true},
+		elasticache.describeCacheClusters({CacheClusterId:config.ElastiCache, ShowCacheNodeInfo:true},
 						  function(err, data) {
 						      if (!err) {
-							  console.log('Describe Cache Cluster Id: '+config.ElastiCache);
-							  if (data.CacheClusters[0].CacheClusterStatus == 'available') { 
+							  util.log('Describe Cache Cluster Id:'+config.ElastiCache);
+							  if (data.CacheClusters[0].CacheClusterStatus == 'available') {
 							      redisEndpoint = data.CacheClusters[0].CacheNodes[0].Endpoint;
-							      var RedisStore = require('socket.io/lib/stores/redis'),
-								  redis  = require('socket.io/node_modules/redis'),
-								  pub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
-								  sub    = redis.createClient(redisEndpoint.Port, redisEndpoint.Address),
-								  client = redis.createClient(redisEndpoint.Port, redisEndpoint.Address);
-							      io.set('store', new RedisStore({
-									  redisPub : pub
-									      , redisSub : sub
-									      , redisClient : client
-									      }));
+							      function configureRedisStore() {
+								  dns.lookup(redisEndpoint.Address, function (err, address) {
+									  // Sometimes the DNS propagation can be slow, try again after 1 second
+									  if (err) { 
+									      setTimeout(configureRedisStore, 1000);
+									  } else {
+									      var RedisStore = require('socket.io/lib/stores/redis'),
+										  redis  = require('socket.io/node_modules/redis'),
+										  pub    = redis.createClient(redisEndpoint.Port, address),
+										  sub    = redis.createClient(redisEndpoint.Port, address),
+										  client = redis.createClient(redisEndpoint.Port, address);
+									      io.set('store', new RedisStore({redisPub:pub, redisSub:sub, redisClient:client}));
+									      serverBroadcast = redis.createClient(redisEndpoint.Port, address);
+									      var redisUpdates = redis.createClient(redisEndpoint.Port, address);
+									      redisUpdates.on('message', function (channel, message) {
+										      data = JSON.parse(message);
+										      if (data.serverId != serverId) { // Don't listen to your own messages
+											  util.log('channel:'+channel+' message:'+message);
+											  switch (channel)
+											      {
+											      case 'disconnect':
+												  onRemoteClientDisconnect(data); break;
+											      case 'new player':
+												  onRemoteNewPlayer(data); break;
+											      case 'move player':
+												  onRemoteMovePlayer(data); break;
+											      case 'score player':
+												  onRemoteScorePlayer(data); break;
+											      case 'all players':
+												  sendAllPlayers(false); break;
+											      default:
+												  util.log('Unknown channel:'+channel+' message:'+message);
+											      }
+										      }
+										  });
+									      redisUpdates.subscribe('disconnect');
+									      redisUpdates.subscribe('new player');
+									      redisUpdates.subscribe('move player');
+									      redisUpdates.subscribe('score player');
+									      redisUpdates.subscribe('all players');
+									      serverBroadcast.publish('all players', JSON.stringify({serverId:serverId})); // To get all players from all servers
+									      setEventHandlers();
+									  }
+								      });
+							      }
+							      configureRedisStore();
 							  } else {
-							      getRedisEndpoint(); // Try again until available
+							      process.nextTick(getRedisEndpoint); // Try again until available
 							  }
 						      } else {
-							  console.log('Error describing Cache Cluster: '+err);
+							  util.log('Error describing Cache Cluster:'+err);
 						      }
 						  });
 	    }
-	    
+	    getRedisEndpoint();
 	});
-	
-    setEventHandlers();
 
-};
+}
 
 var setEventHandlers = function() {
     io.on('connection', onSocketConnection);
-};
-
-function onSocketConnection(client) {
-    util.log('New player has connected: '+client.id);
-    client.on('disconnect', onClientDisconnect);
-    client.on('new player', onNewPlayer);
-    client.on('move player', onMovePlayer);
-    client.on('log', onLog);
-};
-
-function onLog(data) {
-    util.log('Log: '+data);
 }
 
-function onClientDisconnect() {
-    util.log('Player has disconnected: '+this.id);
+function onSocketConnection(client) {
+    util.log('New player has connected:'+client.id);
+    client.on('disconnect', onLocalClientDisconnect);
+    client.on('new player', onLocalNewPlayer);
+    client.on('move player', onLocalMovePlayer);
+    client.on('log', onLog);
+}
 
-    var removePlayer = playerById(this.id);
+function onLog(data) {
+    util.log('Log:'+data);
+}
+
+function onLocalClientDisconnect() {
+    onClientDisconnect.call(this, this.id, true);
+}
+
+function onRemoteClientDisconnect(data) {
+    onClientDisconnect(data.id, false);
+}
+
+function onClientDisconnect(id, local) {
+    util.log('Player has disconnected:'+id+' local:'+local);
+
+    var removePlayer = playerById(id);
 
     if (!removePlayer) {
-	util.log('Player not found: '+this.id);
+	util.log('Player not found:'+id);
 	return;
-    };
+    }
 
-    var message = 'onClientDiconnect: '+JSON.stringify(removePlayer);
+    if (local) {
+	var data = {id:id};
+	this.broadcast.emit('remove player', data);
+	data.serverId = serverId;
+	serverBroadcast.publish('disconnect', JSON.stringify(data));
 
-    sqs.client.sendMessage({QueueUrl: queueUrl, MessageBody: message},
-			   function(err, data) {
-			       if (!err) {
-				   console.log('Message sent, id: '+data.MessageId);
-			       } else {
-				   console.log('Error sending message: '+err);
-			       }
-			   });
+	var message = 'onClientDiconnect:'+JSON.stringify(removePlayer);
+	sqs.client.sendMessage({QueueUrl:queueUrl, MessageBody:message},
+			       function(err, data) {
+				   if (!err) {
+				       util.log('Message sent, id:'+data.MessageId);
+				   } else {
+				       util.log('Error sending message:'+err);
+				   }
+			       });
+    }
 
     players.splice(players.indexOf(removePlayer), 1);
-    this.broadcast.emit('remove player', {id: this.id});
-};
+}
 
 function get_random_color() {
     var letters = '0123456789ABCDEF'.split('');
@@ -262,89 +317,178 @@ function get_random_color() {
     return color;
 }
 
-function onNewPlayer(data) {
-    util.log('onNewPlayer');
+function onLocalNewPlayer(data) {
+    onNewPlayer.call(this, data, true);
+}
+
+function onRemoteNewPlayer(data) {
+    onNewPlayer(data, false);
+}
+
+function onNewPlayer(data, local) {
+    util.log('onNewPlayer local:'+local);
 
     var newPlayer = new Player(data.x, data.y, gameWidth, gameHeight);
-    newPlayer.id = this.id;
+    if (local) {
+	data.id = this.id;
+    }
+    newPlayer.id = data.id;
+
+    var checkPlayer = playerById(newPlayer.id);
+    if (checkPlayer) {
+        util.log('Player already known:'+newPlayer.id);
+        return;
+    }
+    util.log('New player ID: '+newPlayer.id+' local:'+local);
+
     newPlayer.name = data.name;
-    newPlayer.color = get_random_color();
-    newPlayer.score = 0;
 
-    var message = 'onNewPlayer: ' + JSON.stringify(newPlayer);
+    if (local) {
+	newPlayer.color = get_random_color();
+	newPlayer.score = 0;
+    } else {
+	newPlayer.color = data.color;
+	newPlayer.score = data.score;
+    }
 
-    sqs.client.sendMessage({QueueUrl: queueUrl, MessageBody: message},
-			   function(err, data) {
-			       if (!err) {
-				   console.log('Message sent, id: '+data.MessageId);
-			       } else {
-				   console.log('Error sending message: '+err);
-			       }
-			   });
-
-    this.emit('init player', {
-	    color: newPlayer.color,
-		id: newPlayer.id,
-		score: newPlayer.score
-		});
-
-    this.broadcast.emit('new player', {
-	    id: newPlayer.id,
-		name: newPlayer.name,
-		x: newPlayer.getX(),
-		y: newPlayer.getY(),
-		color: newPlayer.color,
-		score: newPlayer.score
-		});
-
-    var i, existingPlayer;
-    for (i = 0; i < players.length; i++) {
-	existingPlayer = players[i];
-	this.emit('new player', {
-		id: existingPlayer.id,
-		    name: existingPlayer.name,
-		    x: existingPlayer.getX(),
-		    y: existingPlayer.getY(),
-		    color: existingPlayer.color,
-		    score: existingPlayer.getScore()
-		    });
+    var forOthersData = {
+	id:newPlayer.id,
+	name:newPlayer.name,
+	x:newPlayer.getX(),
+	y:newPlayer.getY(),
+	color:newPlayer.color,
+	score:newPlayer.score
     };
+
+    if (local) {
+
+	data.serverId = serverId;
+	serverBroadcast.publish('new player', JSON.stringify(data));
+
+	var message = 'onNewPlayer:' + JSON.stringify(newPlayer);
+	sqs.client.sendMessage({QueueUrl:queueUrl, MessageBody:message},
+			       function(err, data) {
+				   if (!err) {
+				       util.log('Message sent, id:'+data.MessageId);
+				   } else {
+				       util.log('Error sending message:'+err);
+				   }
+			       });
+
+	this.broadcast.emit('new player', forOthersData);
+
+	this.emit('init player', {
+		color:newPlayer.color,
+		    id:newPlayer.id,
+		    score:newPlayer.score
+		    });
+   
+
+	var i, existingPlayer;
+	sendAllPlayers.call(this, true);
+    }
 
     players.push(newPlayer);
 
-};
+}
 
-function onMovePlayer(data) {
-    util.log('onMovePlayer');
-    var movePlayer = playerById(this.id);
+function sendAllPlayers(local) {
+    for (i = 0; i < players.length; i++) {
+	existingPlayer = players[i];
+	var data = {
+	    id:existingPlayer.id,
+	    name:existingPlayer.name,
+	    x:existingPlayer.getX(),
+	    y:existingPlayer.getY(),
+	    color:existingPlayer.color,
+	    score:existingPlayer.getScore()
+	};
+	if (local) {
+	    this.emit('new player', data);
+	} else {
+	    data.serverId = serverId;
+	    serverBroadcast.publish('new player', JSON.stringify(data));
+	}
+    }
+}
 
+function onLocalMovePlayer(data) {
+    onMovePlayer.call(this, data, true);
+}
+
+function onRemoteMovePlayer(data) {
+    onMovePlayer(data, false);
+}
+
+function onMovePlayer(data, local) {
+    util.log('onMovePlayer local:'+local);
+
+    if (local) {
+	data.id = this.id;
+	data.serverId = serverId;
+	serverBroadcast.publish('move player', JSON.stringify(data));
+    }
+    var id = data.id;
+
+    var movePlayer = playerById(id);
     if (!movePlayer) {
-	util.log('Player not found: '+this.id);
+	util.log('Player not found:'+id);
 	return;
-    };
-
+    }
+	
     movePlayer.setX(data.x);
     movePlayer.setY(data.y);
 
-    this.broadcast.emit('move player', {id: movePlayer.id, x: data.x, y: data.y});
+    var forOthersData = {id:id, x:data.x, y:data.y};
+    if (local) {
 
-    var collision_id = checkCollision(this.id,data.x,data.y);
+	this.broadcast.emit('move player', forOthersData);
 
-    if (collision_id !== undefined) {
-	util.log('Collision!');
-	var collisionPlayer = playerById(collision_id);
-	collisionPlayer.shake();
-	collisionPlayer.decScore(1);
-	movePlayer.incScore(1);
-	// TODO optimize messages -> too many!!!
-	this.emit('move player', {id: collision_id, x: collisionPlayer.getX(), y: collisionPlayer.getY()});
-	this.broadcast.emit('move player', {id: collision_id, x: collisionPlayer.getX(), y: collisionPlayer.getY()});
-	this.emit('score player', {id: this.id, score: movePlayer.getScore()});
-	this.broadcast.emit('score player', {id: this.id, score: movePlayer.getScore()});
-	this.emit('score player', {id: collision_id, score: collisionPlayer.getScore()});
-	this.broadcast.emit('score player', {id: collision_id, score: collisionPlayer.getScore()});
+	var collision_id = checkCollision(id, data.x, data.y);
+
+	if (collision_id !== undefined) {
+	    util.log('Collision!');
+	    var collisionPlayer = playerById(collision_id);
+	    collisionPlayer.shake();
+	    collisionPlayer.decScore(1);
+	    movePlayer.incScore(1);
+
+	    // TODO optimize messages -> too many!!!
+	    var data;
+
+	    data = {id:collision_id, x:collisionPlayer.getX(), y:collisionPlayer.getY()};
+	    io.sockets.emit('move player', data);
+	    data.serverId = serverId;
+	    serverBroadcast.publish('move player', JSON.stringify(data));
+	    
+	    data = {id:id, score:movePlayer.getScore()};
+	    io.sockets.emit('score player', data);
+	    data.serverId = serverId;
+	    serverBroadcast.publish('score player', JSON.stringify(data));
+	    
+	    data = {id:collision_id, score:collisionPlayer.getScore()};
+	    io.sockets.emit('score player', data);
+	    data.serverId = serverId;
+	    serverBroadcast.publish('score player', JSON.stringify(data));
+	}
+
     }
-};
+    
+}
+
+function onRemoteScorePlayer(data) {
+    util.log('onRemoteScorePlayer');
+
+    var id = data.id;
+
+    var scorePlayer = playerById(id);
+    if (!scorePlayer) {
+	util.log('Player not found:'+id);
+	return;
+    }
+	
+    scorePlayer.setScore(data.score);
+}
 
 function checkCollision(id,x,y) {
     var i;

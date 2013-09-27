@@ -7,11 +7,12 @@
   },
   "dependencies": {
     "express": "*",
-    "passport": "*",
-    "passport-facebook": "*",
-    "passport-twitter": "*",
     "ejs": "*",
     "socket.io": "*",
-    "aws-sdk": "*"
+    "aws-sdk": "*",
+    "node-uuid": "*",
+    "passport": "*",
+    "passport-facebook": "*",
+    "passport-twitter": "*"
   }
 }
